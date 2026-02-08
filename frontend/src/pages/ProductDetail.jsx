@@ -52,7 +52,9 @@ export default function ProductDetail() {
       window.dispatchEvent(new CustomEvent('cart-updated'));
     } catch (err) {
       setAdding(false);
-      setError(err.body?.detail || 'Failed to add to cart');
+      const d = err.body?.detail;
+      const raw = Array.isArray(d) ? d.map((x) => x.msg).join(' ') : (d || 'Failed to add to cart.');
+      setError(String(raw).replace(/^Value error,?\s*/i, ''));
     }
   };
 
@@ -84,7 +86,9 @@ export default function ProductDetail() {
       const data = await api(`/products/${id}/reviews`);
       setReviews(Array.isArray(data) ? data : []);
     } catch (err) {
-      setReviewError(err.body?.detail || 'Failed to submit review');
+      const d = err.body?.detail;
+      const raw = Array.isArray(d) ? d.map((x) => x.msg).join(' ') : (d || 'Failed to submit review.');
+      setReviewError(String(raw).replace(/^Value error,?\s*/i, ''));
     } finally {
       setReviewSubmitting(false);
     }
@@ -104,7 +108,9 @@ export default function ProductDetail() {
       setReviews((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
       setEditingReviewId(null);
     } catch (err) {
-      setReviewError(err.body?.detail || 'Failed to update review');
+      const d = err.body?.detail;
+      const raw = Array.isArray(d) ? d.map((x) => x.msg).join(' ') : (d || 'Failed to update review.');
+      setReviewError(String(raw).replace(/^Value error,?\s*/i, ''));
     } finally {
       setReviewSubmitting(false);
     }
@@ -137,7 +143,9 @@ export default function ProductDetail() {
       setReviewComment('');
       setReviewRating(5);
     } catch (err) {
-      setReviewError(err.body?.detail || 'Failed to delete review');
+      const d = err.body?.detail;
+      const raw = Array.isArray(d) ? d.map((x) => x.msg).join(' ') : (d || 'Failed to delete review.');
+      setReviewError(String(raw).replace(/^Value error,?\s*/i, ''));
     } finally {
       setDeletingReviewId(null);
     }

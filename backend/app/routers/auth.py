@@ -92,3 +92,19 @@ def update_users_me(
     db.refresh(current_user)
     return current_user
 
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+def delete_account(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user),
+):
+    """Delete the current user's account and all related data (cart, orders, reviews)."""
+    user_id = current_user.id
+    db.query(models.CartItem).filter(models.CartItem.user_id == user_id).delete()
+    for order in db.query(models.Order).filter(models.Order.user_id == user_id).all():
+        db.delete(order)
+    db.query(models.Review).filter(models.Review.user_id == user_id).delete()
+    db.delete(current_user)
+    db.commit()
+    return None
+

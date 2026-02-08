@@ -14,7 +14,7 @@ from .routers import reviews as reviews_router
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Simple E-commerce API")
+    app = FastAPI(title="Shoppy")
 
     # CORS
     app.add_middleware(
@@ -47,6 +47,4 @@ app = create_app()
 
 @app.on_event("startup")
 def on_startup():
-    # Simple schema creation for this exercise; in real apps use Alembic migrations.
     Base.metadata.create_all(bind=engine)
-

@@ -16,7 +16,6 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password against a bcrypt hash."""
     try:
         return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
     except Exception:
@@ -25,17 +24,12 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def get_password_hash(password: str) -> str:
     """Hash a password using bcrypt. Automatically handles 72-byte limit."""
-    # Bcrypt has a 72-byte limit, so truncate if necessary
     password_bytes = password.encode('utf-8')
     if len(password_bytes) > 72:
-        # Truncate to 72 bytes, ensuring we don't cut in the middle of a multi-byte character
         truncated_bytes = password_bytes[:72]
-        # Remove any incomplete UTF-8 sequences at the end
         while truncated_bytes and (truncated_bytes[-1] & 0x80) and not (truncated_bytes[-1] & 0x40):
             truncated_bytes = truncated_bytes[:-1]
         password_bytes = truncated_bytes
-    
-    # Hash using bcrypt directly
     salt = bcrypt.gensalt()
     hashed = bcrypt.hashpw(password_bytes, salt)
     return hashed.decode('utf-8')
@@ -78,7 +72,6 @@ async def get_current_user(
 
 
 async def get_current_active_user(current_user: models.User = Depends(get_current_user)) -> models.User:
-    # Placeholder to add additional checks (e.g., is_active) later
     return current_user
 
 

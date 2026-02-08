@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function Register() {
-  const { register, login } = useAuth();
+  const { register } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
@@ -18,11 +18,11 @@ export default function Register() {
     setLoading(true);
     try {
       await register(email, fullName, password);
-      await login(email, password);
-      navigate('/');
+      navigate('/login', { state: { message: 'Account created. Please sign in.' } });
     } catch (err) {
       const msg = err.body?.detail;
-      setError(Array.isArray(msg) ? msg.map((x) => x.msg).join(' ') : msg || 'Registration failed.');
+      const raw = Array.isArray(msg) ? msg.map((x) => x.msg).join(' ') : (msg || 'Registration failed.');
+      setError(String(raw).replace(/^Value error,?\s*/i, ''));
     } finally {
       setLoading(false);
     }

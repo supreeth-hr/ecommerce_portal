@@ -97,7 +97,9 @@ export default function Checkout() {
       });
       navigate('/orders');
     } catch (err) {
-      setError(err.body?.detail || (Array.isArray(err.body) ? err.body.map((x) => x.msg).join(' ') : 'Order failed'));
+      const detail = err.body?.detail;
+      const raw = Array.isArray(detail) ? detail.map((x) => x.msg).join(' ') : (detail || 'Order failed.');
+      setError(String(raw).replace(/^Value error,?\s*/i, ''));
     } finally {
       setSubmitting(false);
     }

@@ -32,7 +32,9 @@ export default function Cart() {
       loadCart();
       window.dispatchEvent(new CustomEvent('cart-updated'));
     } catch (err) {
-      setError(err.body?.detail || 'Failed to update');
+      const d = err.body?.detail;
+      const raw = Array.isArray(d) ? d.map((x) => x.msg).join(' ') : (d || 'Failed to update.');
+      setError(String(raw).replace(/^Value error,?\s*/i, ''));
     } finally {
       setUpdating(null);
     }
@@ -45,7 +47,9 @@ export default function Cart() {
       loadCart();
       window.dispatchEvent(new CustomEvent('cart-updated'));
     } catch (err) {
-      setError(err.body?.detail || 'Failed to remove');
+      const d = err.body?.detail;
+      const raw = Array.isArray(d) ? d.map((x) => x.msg).join(' ') : (d || 'Failed to remove.');
+      setError(String(raw).replace(/^Value error,?\s*/i, ''));
     } finally {
       setUpdating(null);
     }

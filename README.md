@@ -1,300 +1,331 @@
-## Simple E-commerce Portal – Backend
+# Shoppy – E-commerce Portal
 
-This project provides a simple e-commerce backend built with **FastAPI**, **PostgreSQL**, **SQLAlchemy**, and **JWT authentication**. It exposes APIs for:
-
-- **Authentication**: register, login, logout, get current user
-- **Products**: list products, get product details
-- **Cart**: view cart, add/update/remove items, clear cart
-- **Orders**: place an order (with **simulated payment**), list orders, view order details, update order status (admin)
-
-**Frontend:** React + Vite app (**Shoppy**) in `frontend/` – home page, auth (login/register), product listing, cart, checkout, orders.
+A full-stack e-commerce application with a **FastAPI** backend and a **React + Vite** frontend. Users can browse products, add items to cart, place orders, and track order status. Includes authentication, product reviews, and admin features.
 
 ---
 
-### 1. Prerequisites
+## Table of contents
 
-- Python 3.11+ (recommended)
-- PostgreSQL running locally
-- `pip` (Python package manager)
+- [Project structure](#project-structure)
+- [Tech stack](#tech-stack)
+- [Prerequisites](#prerequisites)
+- [Database setup](#database-setup)
+- [Using a different database](#using-a-different-database-sqlite-mysql)
+- [Backend setup & run](#backend-setup--run)
+- [Frontend setup & run](#frontend-setup--run)
+- [Quick start](#quick-start)
+- [Backend overview](#backend-overview)
+- [Frontend overview](#frontend-overview)
+- [API overview](#api-overview)
+- [Making a user admin](#making-a-user-admin)
+- [Typical usage flow](#typical-usage-flow)
 
-**For detailed database setup instructions, see [DATABASE_SETUP.md](DATABASE_SETUP.md)**
+---
 
-Quick setup (using PostgreSQL superuser):
+## Project structure
 
-```sql
-CREATE DATABASE ecommerce_db;
+```
+ecommerce-portal/
+├── backend/
+│   └── app/
+│       ├── main.py          # FastAPI app, CORS, static files, routers
+│       ├── config.py        # Settings (DB, JWT, CORS) from .env
+│       ├── database.py      # SQLAlchemy engine, session, get_db
+│       ├── auth.py          # JWT, password hashing, get_current_user
+│       ├── models.py        # User, Product, CartItem, Order, OrderItem, Review
+│       ├── schemas.py       # Pydantic request/response models
+│       └── routers/
+│           ├── auth.py      # Register, login, logout, /me, delete account
+│           ├── products.py  # List, search, categories, product by id
+│           ├── cart.py      # Get cart, add/update/remove items
+│           ├── orders.py    # Place order, list orders, order detail, status (admin)
+│           ├── reviews.py   # CRUD reviews for products
+│           └── admin.py     # Create/update/delete products (admin only)
+├── frontend/
+│   ├── src/
+│   │   ├── api.js           # API client (fetch + JWT)
+│   │   ├── App.jsx          # Routes, AuthProvider, ProtectedRoute
+│   │   ├── context/
+│   │   │   └── AuthContext.jsx
+│   │   ├── components/     # Header, Layout, ProductCard
+│   │   └── pages/           # Home, Products, ProductDetail, Cart, Checkout, Orders, Account, Login, Register
+│   ├── public/
+│   └── package.json
+├── static/
+│   └── images/products/     # Product images (served by backend)
+├── .env                     # Create this: DATABASE_URL, JWT_SECRET_KEY, etc.
+├── requirements.txt
+└── README.md
 ```
 
 ---
 
-### 2. Backend setup
+## Tech stack
 
-From the project root (`ecommerce-portal`):
+| Layer     | Technologies |
+|----------|--------------|
+| **Backend** | Python 3.11+, FastAPI, SQLAlchemy 2, database (PostgreSQL by default; SQLite/MySQL supported), Pydantic, JWT (python-jose), bcrypt |
+| **Frontend** | React 18, Vite, React Router, CSS (no UI framework) |
+
+---
+
+## Prerequisites
+
+- **Python 3.11+** and `pip`
+- **Node.js 18+** and `npm`
+- **A database**: the project is set up for **PostgreSQL** by default. You can also use **SQLite** or **MySQL** with small changes (see [Using a different database](#using-a-different-database-sqlite-mysql)).
+
+---
+
+## Database setup
+
+### 1. Install PostgreSQL
+
+- **macOS (Homebrew):** `brew install postgresql@16` then `brew services start postgresql@16`
+- **Windows:** Download from [postgresql.org](https://www.postgresql.org/download/windows/) and run the installer.
+- **Linux (Ubuntu/Debian):** `sudo apt update && sudo apt install postgresql postgresql-contrib`
+
+Ensure the PostgreSQL service is running (e.g. port `5432`).
+
+### 2. Create the database
+
+Using the default superuser (often `postgres`):
+
+**Option A – psql (command line):**
+
+```bash
+# macOS/Linux: switch to postgres user or use local role
+psql -U postgres -c "CREATE DATABASE ecommerce_db;"
+```
+
+**Option B – pgAdmin or DBeaver:**  
+Create a new database named `ecommerce_db`.
+
+**Option C – no password (common on local macOS):**
+
+```bash
+psql postgres -c "CREATE DATABASE ecommerce_db;"
+```
+
+### 3. Connection URL
+
+- **With password:** `postgresql+psycopg2://postgres:YOUR_PASSWORD@localhost:5432/ecommerce_db`
+- **No password:** `postgresql+psycopg2://postgres@localhost:5432/ecommerce_db`
+
+Use this value for `DATABASE_URL` in the `.env` file in the next section.  
+Tables are created automatically when you start the backend (see [Backend setup & run](#backend-setup--run)).
+
+---
+
+### Using a different database (SQLite, MySQL)
+
+The app uses **SQLAlchemy**, so you can point it at another database by changing the connection URL and, if needed, the driver.
+
+#### SQLite (no separate server)
+
+- No extra package: Python’s built-in `sqlite3` works with SQLAlchemy.
+- In `.env` set:
+  ```env
+  DATABASE_URL=sqlite:///./ecommerce.db
+  ```
+- The file `ecommerce.db` will be created in the project root when the app runs. No “create database” step.
+
+**Note:** For SQLite, use three slashes (`sqlite:///`) and a path. Avoid using SQLite with multiple worker processes in production.
+
+#### MySQL / MariaDB
+
+- Install a driver, e.g.:
+  ```bash
+  pip install pymysql
+  ```
+- Create a database (e.g. `ecommerce_db`) in MySQL, then in `.env` set:
+  ```env
+  DATABASE_URL=mysql+pymysql://user:password@localhost:3306/ecommerce_db
+  ```
+- Replace `user`, `password`, and port/host if different.
+
+The same `backend/app/models.py` and code are used; only `DATABASE_URL` and the optional extra driver change. Enum and column types used in the project are compatible with PostgreSQL, SQLite, and MySQL.
+
+---
+
+## Backend setup & run
+
+From the **project root** (`ecommerce-portal`):
+
+### 1. Virtual environment and dependencies
 
 ```bash
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
+source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-Create a `.env` file in the project root (same level as `requirements.txt`) with at least:
+### 2. Environment variables
+
+Create a `.env` file in the project root (same level as `requirements.txt`):
 
 ```env
-DATABASE_URL=postgresql+psycopg2://postgres:your_postgres_password@localhost:5432/ecommerce_db
-JWT_SECRET_KEY=CHANGE_ME_TO_A_RANDOM_SECRET
+DATABASE_URL=postgresql+psycopg2://postgres:your_password@localhost:5432/ecommerce_db
+JWT_SECRET_KEY=change_me_to_a_long_random_secret_string
 ACCESS_TOKEN_EXPIRE_MINUTES=60
 FRONTEND_ORIGIN=http://localhost:5173
 ```
 
-**Note:** Replace `your_postgres_password` with your PostgreSQL superuser password. If no password is set (common in local development), use: `postgresql+psycopg2://postgres@localhost:5432/ecommerce_db`
+- Replace `your_password` with your PostgreSQL password (or omit `:your_password` if none).
+- Replace `JWT_SECRET_KEY` with a long random string for production.
 
-> If any of these are omitted, sensible defaults from `backend/app/config.py` will be used (but you should change the JWT secret for real use).
+Defaults are defined in `backend/app/config.py` if you omit variables; you should still set `DATABASE_URL` and `JWT_SECRET_KEY` for your environment.
 
----
-
-### 3. Running the FastAPI server
-
-From the project root:
+### 3. Start the API server
 
 ```bash
 uvicorn backend.app.main:app --reload
 ```
 
-The API will be available at `http://127.0.0.1:8000`.
+- API base URL: **http://127.0.0.1:8000**
+- Interactive docs: **http://127.0.0.1:8000/docs** (Swagger)
+- ReDoc: **http://127.0.0.1:8000/redoc**
 
-Interactive API docs:
-
-- Swagger UI: `http://127.0.0.1:8000/docs`
-- ReDoc: `http://127.0.0.1:8000/redoc`
-
-On startup, the app will automatically create the database tables defined in `backend/app/models.py`.
+On first run, the app creates all tables (users, products, cart_items, orders, order_items, reviews) from `backend/app/models.py`.
 
 ---
 
-### 4. Running the frontend (Shoppy)
+## Frontend setup & run
 
-From the project root:
+From the **project root**:
 
 ```bash
 cd frontend
-npm install   # if not already done
+npm install
 npm run dev
 ```
 
-The app will be at `http://localhost:5173`. Set `VITE_API_URL=http://127.0.0.1:8000` in `frontend/.env` (default) so it talks to your FastAPI backend.
+- App URL: **http://localhost:5173**
+
+### Frontend environment (optional)
+
+Create `frontend/.env` if you need to point to a different API:
+
+```env
+VITE_API_URL=http://127.0.0.1:8000
+```
+
+If omitted, the app uses `http://127.0.0.1:8000` by default.
 
 ---
 
-### 5. API Overview
+## Quick start
 
-#### Auth
+1. **Database:** Create PostgreSQL database `ecommerce_db` (see [Database setup](#database-setup)).
+2. **Backend:** In project root: `python -m venv venv`, activate it, `pip install -r requirements.txt`, create `.env` with `DATABASE_URL` and `JWT_SECRET_KEY`, then run `uvicorn backend.app.main:app --reload`.
+3. **Frontend:** In another terminal, `cd frontend`, `npm install`, `npm run dev`.
+4. Open **http://localhost:5173** – register, browse products, add to cart, checkout, and view orders.
 
-- `POST /auth/register`
-  - Body: `{ "email": string, "full_name": string | null, "password": string }`
-  - Registers a new user.
+Product images are served from `static/images/products/`. The repo includes sample images; you can add products via the admin API or by inserting rows into the `products` table (see [API overview](#api-overview)).
 
-- `POST /auth/login` (OAuth2 password flow)
-  - Form data: `username=<email>&password=<password>`
-  - Returns: `{ "access_token": "...", "token_type": "bearer" }`
+---
 
-- `POST /auth/logout`
-  - Stateless: simply instructs the client to discard its token.
+## Backend overview
 
-- `GET /auth/me`
-  - Requires `Authorization: Bearer <token>`
-  - Returns current user info.
+- **Framework:** FastAPI. Routers are under `backend/app/routers/` (auth, products, cart, orders, reviews, admin).
+- **Database:** SQLAlchemy 2 (async not used; standard session per request). Connection and session factory in `database.py`; `get_db` is used as a FastAPI dependency.
+- **Auth:** JWT access tokens (python-jose). Password hashing with bcrypt. Protected routes use `get_current_user` or `get_current_admin_user` from `auth.py`.
+- **Config:** Pydantic Settings in `config.py`; reads from `.env` (e.g. `DATABASE_URL`, `JWT_SECRET_KEY`, `FRONTEND_ORIGIN`).
+- **Static files:** Product images in `static/images/products/` are mounted at `/static` by `main.py`.
 
-#### Products
+---
 
-- `GET /products/categories`
-  - Public: returns the fixed list of product categories (value and label). Use for filters/dropdowns.
+## Frontend overview
 
-- `GET /products`
-  - Public: returns a list of products.
-  - Optional query parameter: `?category=Electronics` to filter by category. Category must be one of: Electronics, Fashion & Apparel, Books & Media, Home & Living, Sports & Outdoor, Grocery & Food.
+- **Stack:** React 18, Vite, React Router 6. No external UI library; styling in `App.css`.
+- **Auth:** `AuthContext` stores user and provides `login`, `logout`, `register`, `updateProfile`, `deleteAccount`. JWT is kept in `localStorage` and sent via `api.js` for authenticated requests.
+- **Routes:** Home (`/`), Products (`/products`), Product detail (`/products/:id`), Cart (`/cart`), Checkout (`/checkout`), Orders (`/orders`), Order detail (`/orders/:id`), Account (`/account`), Login (`/login`), Register (`/register`). Cart, Checkout, and Orders are protected (redirect to Account if not logged in).
+- **Features:** Browse and search products, category filter, product reviews (add/edit/delete), cart (add/update/remove), checkout with shipping and simulated payment, order list with status stepper (Pending → Confirmed → Shipped → Delivered / Cancelled), account profile (update name/email/password, logout, delete account).
 
-- `GET /products/search?q={keywords}`
-  - Public: searches products by keywords in name, description, and category.
-  - Case-insensitive partial matching.
-  - Example: `GET /products/search?q=laptop` returns products matching "laptop" in any field.
+---
 
-- `GET /products/{id}`
-  - Public: returns a single product by ID.
+## API overview
 
-#### Product Reviews (Comments)
+### Auth
 
-- `GET /products/{product_id}/reviews`
-  - Public: returns all reviews for a product (includes author info).
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/auth/register` | Register (body: `email`, `full_name?`, `password`). Password rules: 8+ chars, upper, lower, digit, special. |
+| POST | `/auth/login` | Login (form: `username`=email, `password`). Returns `access_token`. |
+| POST | `/auth/logout` | Logout (stateless; client discards token). |
+| GET | `/auth/me` | Current user (requires Bearer token). |
+| PATCH | `/auth/me` | Update profile (optional: `full_name`, `email`, `password`). |
+| DELETE | `/auth/me` | Delete account and all related data (cart, orders, reviews). |
 
-- `POST /products/{product_id}/reviews`
-  - Requires auth. Body: `{ "comment": "string", "rating": 1-5 (optional) }`. Add a review.
+### Products
 
-- `GET /reviews/{review_id}`
-  - Public: returns a single review.
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/products/categories` | List categories (for filters). |
+| GET | `/products` | List products. Optional: `?category=...`. |
+| GET | `/products/search?q=...` | Search by keyword. |
+| GET | `/products/{id}` | Product by ID. |
 
-- `PUT /reviews/{review_id}`
-  - Requires auth. Update your own review (body: `{ "comment": "string", "rating": 1-5 }`, both optional). Admins can edit any review.
+### Reviews
 
-- `DELETE /reviews/{review_id}`
-  - Requires auth. Delete your own review. Admins can delete any review.
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/products/{id}/reviews` | Reviews for a product. |
+| POST | `/products/{id}/reviews` | Add review (body: `comment`, `rating?` 1–5). Auth required. |
+| GET | `/reviews/{id}` | Single review. |
+| PUT | `/reviews/{id}` | Update own review. Auth required. |
+| DELETE | `/reviews/{id}` | Delete own review. Auth required. |
 
-#### Adding Products & Product Images
+### Cart (auth required)
 
-**Product Images Storage:**
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/cart` | Get cart (items, totals). |
+| POST | `/cart/items` | Add item (body: `product_id`, `quantity`). |
+| PATCH | `/cart/items/{id}` | Update quantity (0 = remove). |
+| DELETE | `/cart/items/{id}` | Remove item. |
+| DELETE | `/cart` | Clear cart. |
 
-Product images are stored in the `static/images/products/` directory and served via FastAPI's static file serving.
+### Orders (auth required)
 
-- **Directory structure**: `static/images/products/`
-- **Image URL format**: `/static/images/products/your-image.jpg`
-- **Access**: Images are accessible at `http://127.0.0.1:8000/static/images/products/your-image.jpg`
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/orders` | Place order (body: shipping fields + `payment`). Simulated payment; creates order, clears cart. |
+| GET | `/orders` | List current user’s orders. |
+| GET | `/orders/{id}` | Order detail with items. |
+| PATCH | `/orders/{id}/status` | Update order status. **Admin only.** |
 
-**To add product images:**
+### Admin (admin user only)
 
-1. Place your image files (`.jpg`, `.png`, etc.) in the `static/images/products/` directory.
-2. When inserting products into the database, set the `image_url` field to `/static/images/products/your-image.jpg` (relative path).
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/admin/products` | Create product. |
+| POST | `/admin/products/bulk` | Create multiple products. |
+| PUT | `/admin/products/{id}` | Update product. |
+| DELETE | `/admin/products/{id}` | Delete product. |
 
-**Adding Products Manually:**
+Order status values: `PENDING`, `CONFIRMED`, `SHIPPED`, `DELIVERED`, `CANCELLED`.
 
-You can insert products directly into the `products` table using SQL or a database client (e.g., pgAdmin, DBeaver, psql):
+---
+
+## Making a user admin
+
+Admin endpoints require a user with `is_admin = true`. After registering (or for an existing user), run in PostgreSQL:
 
 ```sql
-INSERT INTO products (name, description, category, price, image_url, stock, created_at)
-VALUES 
-  ('Laptop', 'High-performance laptop', 'Electronics', 999.99, '/static/images/products/laptop.jpg', 10, NOW()),
-  ('Smartphone', 'Latest smartphone model', 'Electronics', 699.99, '/static/images/products/phone.jpg', 25, NOW()),
-  ('Headphones', 'Wireless noise-cancelling headphones', 'Electronics', 199.99, '/static/images/products/headphones.jpg', 50, NOW()),
-  ('T-Shirt', 'Cotton t-shirt', 'Clothing', 29.99, '/static/images/products/tshirt.jpg', 100, NOW()),
-  ('Novel', 'Bestselling fiction novel', 'Books', 15.99, '/static/images/products/novel.jpg', 200, NOW());
-```
-
-**Product Schema:**
-- `name` (string, required): Product name
-- `description` (text, optional): Product description
-- `category` (string, optional): Product category (e.g., "Electronics", "Clothing", "Books")
-- `price` (float, required): Product price
-- `image_url` (string, optional): Path to image (e.g., `/static/images/products/product.jpg`)
-- `stock` (integer, default 0): Available stock quantity
-- `created_at` (timestamp): Auto-set on creation
-
-> **Note**: Make sure the image files exist in `static/images/products/` before referencing them in the database, or the frontend will show broken image links.
-
-#### Cart (requires auth)
-
-All cart endpoints require a JWT access token:
-
-- `GET /cart`
-  - Returns `items`, `total_quantity`, `total_amount`.
-
-- `POST /cart/items`
-  - Body: `{ "product_id": number, "quantity": number }`
-  - Adds a new item or increases quantity.
-
-- `PATCH /cart/items/{item_id}`
-  - Body: `{ "quantity": number }` (if `0`, the item is removed).
-
-- `DELETE /cart/items/{item_id}`
-  - Removes an item.
-
-- `DELETE /cart`
-  - Clears the entire cart.
-
-#### Orders (requires auth)
-
-- `POST /orders`
-  - Body:
-    ```json
-    {
-      "payment": {
-        "cardholder_name": "John Doe",
-        "card_last4": "4242",
-        "expiry_month": 12,
-        "expiry_year": 2030
-      }
-    }
-    ```
-  - **Simulated payment**: only local validation is performed; no external payment gateway.
-  - If the user’s cart has items:
-    - Marks payment status as `PAID`
-    - Creates an order and order items
-    - Optionally decrements product stock
-    - Clears the cart
-
-- `GET /orders`
-  - Returns a list of the user’s orders (id, status, payment_status, total_amount, created_at).
-
-- `GET /orders/{order_id}`
-  - Returns full order details including items.
-
-- `PATCH /orders/{order_id}/status`
-  - Changes order status (e.g., `PENDING`, `CONFIRMED`, `SHIPPED`, `DELIVERED`, `CANCELLED`).
-  - **Requires an admin user** (`is_admin = true` in the database).
-  - Useful to simulate order status changes during testing.
-
-#### Admin APIs (Developer/Admin Only)
-
-All admin endpoints require **admin authentication** (`is_admin = true`). See [DATABASE_SETUP.md](DATABASE_SETUP.md) for how to make a user admin.
-
-**Product Management:**
-
-- `POST /admin/products`
-  - Create a single product.
-  - Body: `{ "name": string, "description": string | null, "category": string | null, "price": number, "image_url": string | null, "stock": number }`
-  - Returns the created product.
-
-- `POST /admin/products/bulk`
-  - Create multiple products at once (useful for seeding).
-  - Body: `[{ "name": "...", ... }, { "name": "...", ... }]` (array of products)
-  - Returns array of created products.
-
-- `PUT /admin/products/{product_id}`
-  - Update an existing product.
-  - Body: Same as create product.
-
-- `DELETE /admin/products/{product_id}`
-  - Delete a product.
-
-**Example: Creating a product via API:**
-
-```bash
-# 1. Register and login to get a token (if not already done)
-POST /auth/register
-POST /auth/login
-
-# 2. Make your user admin (via SQL)
 UPDATE users SET is_admin = true WHERE email = 'your-email@example.com';
-
-# 3. Create a product
-POST /admin/products
-Authorization: Bearer <your-admin-token>
-Content-Type: application/json
-
-{
-  "name": "Laptop",
-  "description": "High-performance laptop",
-  "category": "Electronics",
-  "price": 999.99,
-  "image_url": "/static/images/products/laptop.jpg",
-  "stock": 10
-}
 ```
 
----
-
-### 6. Typical usage flow
-
-1. **Register** a new user via `POST /auth/register`.
-2. **Login** via `POST /auth/login` and capture the `access_token`.
-3. Use `Authorization: Bearer <access_token>` for all protected routes.
-4. (Optionally) Insert some `products` directly into the `products` table for testing.
-5. **List products** via `GET /products` and pick IDs.
-6. **Build a cart** using `POST /cart/items`.
-7. **View cart** via `GET /cart`.
-8. **Place an order** using `POST /orders` with simulated payment info.
-9. **Track orders** via `GET /orders` and `GET /orders/{id}`.
-10. (Optional admin) **Update order status** using `PATCH /orders/{id}/status`.
+Then use the same account to log in; the token will have admin rights for `/admin/*` and `PATCH /orders/{id}/status`.
 
 ---
 
-The frontend (React + Vite) will later consume these APIs, using the same JWT access token for authenticated requests.
+## Typical usage flow
 
+1. Register at `/register`, then sign in at `/login`.
+2. Browse products on Home or `/products`; open a product and add to cart.
+3. Go to Cart, adjust quantities, then Checkout (shipping + simulated payment).
+4. After placing order, view Orders and order detail; status can be updated by an admin via `PATCH /orders/{id}/status`.
+5. Account: update profile, log out, or delete account (DELETE `/auth/me`).
+
+For product images, place files in `static/images/products/` and set `image_url` to `/static/images/products/filename.jpg` when creating products (via admin API or direct SQL).

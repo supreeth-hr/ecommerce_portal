@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const successMessage = location.state?.message;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -19,7 +21,9 @@ export default function Login() {
       await login(email, password);
       navigate('/');
     } catch (err) {
-      setError(err.body?.detail || 'Login failed. Check email and password.');
+      const d = err.body?.detail;
+      const raw = Array.isArray(d) ? d.map((x) => x.msg).join(' ') : (d || 'Login failed. Check email and password.');
+      setError(String(raw).replace(/^Value error,?\s*/i, ''));
     } finally {
       setLoading(false);
     }
@@ -31,6 +35,7 @@ export default function Login() {
         <h1 className="auth-title">Welcome back</h1>
         <p className="auth-subtitle">Sign in to your Shoppy account</p>
         <form onSubmit={handleSubmit} className="auth-form">
+          {successMessage && <p className="auth-success">{successMessage}</p>}
           {error && <p className="auth-error">{error}</p>}
           <label className="auth-label">
             Email

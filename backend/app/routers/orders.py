@@ -16,7 +16,6 @@ def place_order(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_active_user),
 ):
-    # Simulate payment processing: basic validation has already been done by Pydantic.
     payment_info = order_in.payment
     if not payment_info.card_last4.isdigit():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid card information")
@@ -48,7 +47,7 @@ def place_order(
         updated_at=now,
     )
     db.add(order)
-    db.flush()  # ensure order.id is available
+    db.flush()
 
     for item in cart_items:
         product = item.product

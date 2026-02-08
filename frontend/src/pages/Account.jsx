@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function Account() {
-  const { user, logout, updateProfile } = useAuth();
+  const { user, logout, updateProfile, deleteAccount } = useAuth();
   const [fullName, setFullName] = useState(user?.full_name ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
   const [password, setPassword] = useState('');
@@ -18,6 +18,7 @@ export default function Account() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const handleUpdate = async (e) => {
     e.preventDefault();
@@ -37,7 +38,9 @@ export default function Account() {
       setPassword('');
       setSuccess('Profile updated successfully!');
     } catch (err) {
-      setError(err.body?.detail || (Array.isArray(err.body) ? err.body.map((x) => x.msg).join(' ') : 'Update failed'));
+      const detail = err.body?.detail;
+      const raw = Array.isArray(detail) ? detail.map((x) => x.msg).join(' ') : (detail || 'Update failed.');
+      setError(String(raw).replace(/^Value error,?\s*/i, ''));
     } finally {
       setLoading(false);
     }
@@ -45,6 +48,18 @@ export default function Account() {
 
   const handleLogout = () => {
     if (window.confirm('Are you sure you want to log out?')) logout();
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!window.confirm('Are you sure you want to delete your account? All your data (orders, cart, reviews) will be permanently removed.')) return;
+    setDeleting(true);
+    try {
+      await deleteAccount();
+    } catch (err) {
+      setError(err.body?.detail || 'Failed to delete account.');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   if (!user) {
@@ -129,6 +144,14 @@ export default function Account() {
           </label>
           <button type="submit" className="auth-btn" disabled={loading}>
             {loading ? 'Updating…' : 'Update profile'}
+          </button>
+          <button
+            type="button"
+            className="auth-btn account-delete-btn"
+            onClick={handleDeleteAccount}
+            disabled={loading || deleting}
+          >
+            {deleting ? 'Deleting…' : 'Delete account'}
           </button>
         </form>
 
